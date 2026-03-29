@@ -1,0 +1,2 @@
+# pingo
+Attendance application
