@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pingo/core/env/env.dart';
 import 'package:pingo/core/router.dart';
+import 'package:pingo/core/theme/main_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabaseAnonKey);
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -18,10 +20,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp.router(
       // 1. Use .router constructor
       title: 'Pingo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: mainTheme,
       // 2. Pass your configuration here
       routerConfig: AppRouter.pingoConfig,
     );

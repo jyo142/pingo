@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pingo/core/auth/supabase_auth_repository.dart';
 import 'package:pingo/features/auth/screens/login_screen.dart';
+import 'package:pingo/features/events/screens/create_event_screen.dart';
 import 'package:pingo/features/home/screens/home_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,7 +31,7 @@ abstract class AppRouter {
                 name: "home",
                 path: '/home',
                 pageBuilder: (context, state) =>
-                    const NoTransitionPage(child: HomeScreen()),
+                    NoTransitionPage(child: HomeScreen()),
               ),
             ],
           ),
@@ -41,6 +42,11 @@ abstract class AppRouter {
         name: "login",
         path: "/unauthenticated",
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        name: "createEvent",
+        path: "/createEvent",
+        builder: (context, state) => const CreateEventScreen(),
       ),
     ],
 

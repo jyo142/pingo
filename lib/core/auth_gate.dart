@@ -16,7 +16,7 @@ class AuthGate extends StatelessWidget {
 
         // If we have a session, show Home. Otherwise, show Login.
         if (session != null) {
-          return const HomeScreen();
+          return HomeScreen();
         } else {
           return const LoginScreen();
         }
