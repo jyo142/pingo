@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pingo/core/db/supabase_user_helpers.dart';
+import 'package:pingo/features/home/models/event_summary.dart';
+import 'package:pingo/features/home/models/home_data.dart';
+import 'package:pingo/features/home/services/home_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class HomeScreen extends StatelessWidget {
-  HomeScreen({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final Future<HomeData> _future = HomeService.fetchHomeData();
 
   final user = Supabase.instance.client.auth.currentUser;
 
@@ -22,75 +32,89 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _purple,
-      body: Column(
-        children: [
-          // ── Purple hero section ──────────────────────────────
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  _buildStatsStrip(),
-                  const SizedBox(height: 16),
-                  _buildActionButtons(context),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
+    return FutureBuilder<HomeData>(
+      future: _future,
+      builder: (context, snap) {
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
+        final data = snap.data!;
 
-          // ── White card panel ─────────────────────────────────
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: _surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionHeader("Today's Event", onTap: () {}),
-                    const SizedBox(height: 12),
-                    _buildTodayEventCard(),
-                    const SizedBox(height: 24),
-                    _buildSectionHeader("Upcoming", onTap: () {}),
-                    const SizedBox(height: 12),
-                    _buildUpcomingItem(
-                      icon: Icons.calendar_today_rounded,
-                      iconColor: _purple,
-                      iconBg: _purpleLight,
-                      title: "Team Meeting",
-                      subtitle: "Conference Room A",
-                      dateLabel: "Tomorrow",
-                    ),
-                    const SizedBox(height: 10),
-                    _buildUpcomingItem(
-                      icon: Icons.star_rounded,
-                      iconColor: _amber,
-                      iconBg: _amberLight,
-                      title: "Hackathon",
-                      subtitle: "Innovation Lab",
-                      dateLabel: "Friday",
-                    ),
-                  ],
+        return Scaffold(
+          backgroundColor: _purple,
+          body: Column(
+            children: [
+              // ── Purple hero section ──────────────────────────────
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      _buildStatsStrip(),
+                      const SizedBox(height: 16),
+                      _buildActionButtons(context),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
 
-      // ── Bottom nav ───────────────────────────────────────────
-      bottomNavigationBar: _buildBottomNav(),
+              // ── White card panel ─────────────────────────────────
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(28),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionHeader("Today's Event", onTap: () {}),
+                        const SizedBox(height: 12),
+                        data.todayEvent == null
+                            ? _buildEmptyState(
+                                icon: Icons.event_available_rounded,
+                                message: "No events today",
+                              )
+                            : _buildTodayEventCard(data.todayEvent!),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader("Upcoming", onTap: () {}),
+                        const SizedBox(height: 12),
+                        data.upcoming.isEmpty
+                            ? _buildEmptyState(
+                                icon: Icons.calendar_month_rounded,
+                                message: "Nothing coming up",
+                                submessage:
+                                    "Events in the next 2 weeks will appear here",
+                              )
+                            : Column(
+                                children: snap.data!.upcoming
+                                    .map(
+                                      (e) =>
+                                          _buildUpcomingItem(eventSummary: e),
+                                    )
+                                    .toList(),
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // ── Bottom nav ───────────────────────────────────────────
+          bottomNavigationBar: _buildBottomNav(),
+        );
+      },
     );
   }
 
@@ -279,8 +303,53 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String message,
+    String? submessage,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0x12000000)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _purpleLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: _purple, size: 22),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (submessage != null) ...[
+            Text(
+              submessage,
+              style: const TextStyle(fontSize: 12, color: _textMuted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ── Today's event card ─────────────────────────────────────────
-  Widget _buildTodayEventCard() {
+  Widget _buildTodayEventCard(EventSummary todayEvent) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -298,8 +367,8 @@ class HomeScreen extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "AI Workshop",
+                  Text(
+                    todayEvent.name,
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
@@ -308,7 +377,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Room 301  ·  11:00 AM",
+                    todayEvent.location,
                     style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                   ),
                 ],
@@ -379,14 +448,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   // ── Upcoming event row ─────────────────────────────────────────
-  Widget _buildUpcomingItem({
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBg,
-    required String title,
-    required String subtitle,
-    required String dateLabel,
-  }) {
+  Widget _buildUpcomingItem({required EventSummary eventSummary}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -400,10 +462,10 @@ class HomeScreen extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: iconBg,
+              color: _purpleLight,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: iconColor, size: 18),
+            child: Icon(Icons.calendar_today_rounded, color: _purple, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -411,7 +473,7 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  eventSummary.name,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -419,7 +481,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  subtitle,
+                  eventSummary.location,
                   style: TextStyle(fontSize: 12, color: Colors.grey[400]),
                 ),
               ],
@@ -432,7 +494,7 @@ class HomeScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              dateLabel,
+              "Tommorow", // TODO : Fix this
               style: const TextStyle(fontSize: 12, color: _textMuted),
             ),
           ),

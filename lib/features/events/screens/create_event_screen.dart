@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pingo/features/events/models/repeat_config.dart';
+import 'package:pingo/features/events/services/event_service.dart';
 import 'package:pingo/features/events/widgets/repeat_bottom_sheet.dart';
 
 enum AttendanceType { qrCode, manual, gps }
@@ -19,7 +20,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   static const _textPrimary = Color(0xFF1A1A2E);
   static const _textMuted = Color(0xFF888888);
   static const _cardBorder = Color(0x12000000);
+
+  // ── Form ───────────────────────────────────────────────────────
   final _createEventFormKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _descController = TextEditingController();
+  final _locationController = TextEditingController();
 
   RepeatConfig _repeat = RepeatConfig();
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 3));
@@ -28,6 +34,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   String? _dateError;
   String? _startTimeError;
   String? _endTimeError;
+
+  bool _isCreating = false;
+
   @override
   void dispose() {
     super.dispose();
@@ -46,16 +55,49 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+
+        // Auto-set start time to top of next hour when today is selected
+        final now = DateTime.now();
+        final isToday =
+            picked.year == now.year &&
+            picked.month == now.month &&
+            picked.day == now.day;
+        if (isToday) {
+          _selectedStartTime = TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);
+          _selectedEndTime = TimeOfDay(
+            hour: (_selectedStartTime.hour + 1) % 24,
+            minute: 0,
+          );
+          _startTimeError = null;
+        }
+      });
+    }
+  }
+
+  TimeOfDay get _minimumTime {
+    final now = DateTime.now();
+    final isToday =
+        _selectedDate.year == now.year &&
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
+    if (!isToday) return const TimeOfDay(hour: 0, minute: 0);
+    return TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);
   }
 
   Future<void> _pickTime(
     TimeOfDay initialTime,
     Function(TimeOfDay) onSelected,
   ) async {
+    final minTime = _minimumTime;
+
     final picked = await showTimePicker(
       context: context,
-      initialTime: initialTime,
+      initialTime: initialTime == const TimeOfDay(hour: 0, minute: 0)
+          ? _minimumTime // ← open at the minimum when unset
+          : initialTime,
       builder: (context, child) => Theme(
         data: Theme.of(
           context,
@@ -64,7 +106,30 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       ),
     );
 
-    if (picked != null) onSelected(picked);
+    if (picked != null) {
+      final pickedMinutes = picked.hour * 60 + picked.minute;
+      final minMinutes = minTime.hour * 60 + minTime.minute;
+
+      final isToday =
+          _selectedDate.year == DateTime.now().year &&
+          _selectedDate.month == DateTime.now().month &&
+          _selectedDate.day == DateTime.now().day;
+
+      if (isToday && pickedMinutes < minMinutes) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Time must be ${minTime.format(context)} or later for today',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      onSelected(picked);
+    }
   }
 
   String get _formattedDate {
@@ -113,6 +178,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       _buildField(
                         label: "Event Name",
                         child: _buildTextInput(
+                          controller: _nameController,
+
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Event Name is required';
@@ -124,7 +191,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       const SizedBox(height: 18),
                       _buildField(
                         label: "Description",
-                        child: _buildTextInput(maxLines: 3),
+                        child: _buildTextInput(
+                          controller: _descController,
+                          maxLines: 3,
+                        ),
                       ),
                       const SizedBox(height: 18),
                       Row(
@@ -152,13 +222,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 icon: Icons.access_time_rounded,
                                 text: _formattedStartTime,
                                 errorText: _startTimeError,
-                                onTap: () =>
-                                    _pickTime(_selectedStartTime, (picked) {
-                                      setState(() {
-                                        _selectedStartTime = picked;
-                                        _startTimeError = null; // clear on pick
-                                      });
-                                    }),
+                                onTap: () => _pickTime(_selectedStartTime, (
+                                  picked,
+                                ) {
+                                  setState(() {
+                                    _selectedStartTime = picked;
+                                    _startTimeError = null;
+                                    // Auto-set end time to one hour after start
+                                    _selectedEndTime = TimeOfDay(
+                                      hour: (picked.hour + 1) % 24,
+                                      minute: 0,
+                                    );
+                                    _endTimeError = null;
+                                  });
+                                }),
                               ),
                             ),
                           ),
@@ -188,6 +265,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       _buildField(
                         label: "Location",
                         child: _buildTextInput(
+                          controller: _locationController,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return "Location is required";
@@ -270,11 +348,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   // ── Text input ─────────────────────────────────────────────────
   Widget _buildTextInput({
+    required TextEditingController controller,
     String? Function(String?)? validator,
     int maxLines = 1,
     IconData? prefixIcon,
   }) {
     return TextFormField(
+      controller: controller,
       maxLines: maxLines,
       style: const TextStyle(fontSize: 14, color: _textPrimary),
       decoration: InputDecoration(
@@ -384,30 +464,41 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _handleCreate,
+        onPressed: _isCreating ? null : _handleCreate,
 
-        child: const Text(
-          "Create Event",
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
+        child: _isCreating
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Text(
+                "Create Event",
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
       ),
     );
   }
 
-  void _handleCreate() {
-    // TODO: validate & submit to Supabase
+  Future<void> _handleCreate() async {
+    // 1. Validate tappable fields manually
     bool tappableValid = true;
+    final start = _selectedStartTime.hour * 60 + _selectedStartTime.minute;
+    final end = _selectedEndTime.hour * 60 + _selectedEndTime.minute;
+    final minTime = _minimumTime;
+    final min = minTime.hour * 60 + minTime.minute;
 
     setState(() {
-      // Validate date (example: must be in future)
-      _dateError = null;
-
-      // Validate times
-      final start = _selectedStartTime.hour * 60 + _selectedStartTime.minute;
-      final end = _selectedEndTime.hour * 60 + _selectedEndTime.minute;
-
       if (start == 0 && end == 0) {
         _startTimeError = 'Please set a start time';
+        tappableValid = false;
+      } else if (start < min) {
+        // ← add this
+        _startTimeError =
+            'Start must be ${minTime.format(context)} or later for today';
         tappableValid = false;
       } else {
         _startTimeError = null;
@@ -420,12 +511,51 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         _endTimeError = null;
       }
     });
+    // 2. Validate TextFormFields
     final formValid = _createEventFormKey.currentState!.validate();
     if (!formValid || !tappableValid) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Event created successfully")));
-    context.pop();
+
+    // 3. Combine date + time
+    final startsAt = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedStartTime.hour,
+      _selectedStartTime.minute,
+    );
+    final endsAt = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedEndTime.hour,
+      _selectedEndTime.minute,
+    );
+
+    setState(() => _isCreating = true);
+
+    try {
+      await EventService.createEvent(
+        name: _nameController.text.trim(),
+        description: _descController.text.trim(),
+        location: _locationController.text.trim(),
+        startsAt: startsAt,
+        endsAt: endsAt,
+        repeat: _repeat,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Event created!')));
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to create event: $e')));
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
   }
 
   Widget _buildRepeatRow() {
