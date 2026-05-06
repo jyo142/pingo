@@ -14,8 +14,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final Future<HomeData> _future = HomeService.fetchHomeData();
-
+  late Future<HomeData> _future;
   final user = Supabase.instance.client.auth.currentUser;
 
   String? get userFirstName => user?.firstName;
@@ -31,12 +30,19 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _cardBorder = Color(0x12000000);
 
   @override
+  void initState() {
+    super.initState();
+    _future = HomeService.fetchHomeData();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<HomeData>(
       future: _future,
       builder: (context, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final data = snap.data!;
 
         return Scaffold(
@@ -110,9 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-
-          // ── Bottom nav ───────────────────────────────────────────
-          bottomNavigationBar: _buildBottomNav(),
         );
       },
     );
@@ -221,7 +224,13 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icons.add_circle_outline_rounded,
             label: "Create Event",
             isPrimary: true,
-            onTap: () => context.push('/createEvent'),
+            onTap: () async => {
+              await context.push('/createEvent'),
+              // 👇 THIS replaces didPopNext
+              setState(() {
+                _future = HomeService.fetchHomeData();
+              }),
+            },
           ),
         ),
         const SizedBox(width: 10),
@@ -350,99 +359,104 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── Today's event card ─────────────────────────────────────────
   Widget _buildTodayEventCard(EventSummary todayEvent) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    todayEvent.name,
+    return InkWell(
+      onTap: () {
+        context.push('/events/${todayEvent.id}');
+      },
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _cardBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      todayEvent.name,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: _textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      todayEvent.location,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _amberLight,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    "Pending",
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: _textPrimary,
+                      color: _amber,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    todayEvent.location,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
                 ),
-                decoration: BoxDecoration(
-                  color: _amberLight,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  "Pending",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _amber,
+              ],
+            ),
+            const Divider(height: 24, thickness: 0.5),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE24B4A),
+                    shape: BoxShape.circle,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const Divider(height: 24, thickness: 0.5),
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE24B4A),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  "Starts in 45 min",
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.qr_code, size: 14),
-                label: const Text(
-                  "Mark Attendance",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _purple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Starts in 45 min",
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 0,
                 ),
-              ),
-            ],
-          ),
-        ],
+                ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.qr_code, size: 14),
+                  label: const Text(
+                    "Mark Attendance",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _purple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -497,57 +511,6 @@ class _HomeScreenState extends State<HomeScreen> {
               "Tommorow", // TODO : Fix this
               style: const TextStyle(fontSize: 12, color: _textMuted),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Bottom navigation ──────────────────────────────────────────
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.black.withOpacity(0.08), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: NavigationBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        indicatorColor: _purpleLight,
-        selectedIndex: 0,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(
-            selectedIcon: Icon(Icons.home_rounded, color: _purple),
-            icon: Icon(Icons.home_outlined, color: _textMuted),
-            label: "Home",
-          ),
-          NavigationDestination(
-            icon: Badge(
-              child: Icon(Icons.notifications_outlined, color: _textMuted),
-            ),
-            label: "Alerts",
-          ),
-          NavigationDestination(
-            icon: Badge(
-              label: Text("2"),
-              child: Icon(Icons.chat_bubble_outline_rounded, color: _textMuted),
-            ),
-            label: "Messages",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.qr_code_scanner_rounded, color: _textMuted),
-            label: "Scan QR",
           ),
         ],
       ),

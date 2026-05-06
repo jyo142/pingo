@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:pingo/core/auth/supabase_auth_repository.dart';
 import 'package:pingo/features/auth/screens/login_screen.dart';
 import 'package:pingo/features/events/screens/create_event_screen.dart';
+import 'package:pingo/features/events/screens/event_details_screen.dart';
 import 'package:pingo/features/home/screens/home_screen.dart';
+import 'package:pingo/features/navbar/main_bottom_nav_bar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -19,37 +21,63 @@ abstract class AppRouter {
     initialLocation: '/home',
 
     routes: [
+      /// 🌍 ROOT LEVEL (global overlays)
+      GoRoute(
+        path: '/unauthenticated',
+        builder: (_, __) => const LoginScreen(),
+      ),
+
+      GoRoute(
+        path: '/createEvent',
+        parentNavigatorKey: _rootNavigatorKey, // 👈 important
+        builder: (_, __) => const CreateEventScreen(),
+      ),
+
+      GoRoute(
+        path: '/events/:id',
+        parentNavigatorKey: _rootNavigatorKey, // 👈 important
+        builder: (_, state) =>
+            EventDetailScreen(eventId: state.pathParameters['id']!),
+      ),
+
+      /// 📱 SHELL (bottom tabs)
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          // You'll need to uncomment and implement your NavBar here
-          return Scaffold(body: navigationShell);
+          return Scaffold(
+            body: navigationShell,
+            bottomNavigationBar: MainBottomNavBar(shell: navigationShell),
+          );
         },
         branches: [
           StatefulShellBranch(
             routes: [
+              GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
+            ],
+          ),
+
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/alerts', builder: (_, __) => const HomeScreen()),
+            ],
+          ),
+
+          StatefulShellBranch(
+            routes: [
               GoRoute(
-                name: "home",
-                path: '/home',
-                pageBuilder: (context, state) =>
-                    NoTransitionPage(child: HomeScreen()),
+                path: '/messages',
+                builder: (_, __) => const HomeScreen(),
               ),
             ],
           ),
-          // Add your other branches here...
+
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/scan', builder: (_, __) => const HomeScreen()),
+            ],
+          ),
         ],
       ),
-      GoRoute(
-        name: "login",
-        path: "/unauthenticated",
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        name: "createEvent",
-        path: "/createEvent",
-        builder: (context, state) => const CreateEventScreen(),
-      ),
     ],
-
     // 3. Updated Redirect Logic for Supabase
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;

@@ -682,6 +682,11 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   Widget _statusBadge(AttendeeStatus status) {
     final Map<AttendeeStatus, (String, Color, Color)> configs = {
+      AttendeeStatus.owner: (
+        'Owner',
+        const Color(0xFFEAF3DE),
+        const Color(0xFF27500A),
+      ),
       AttendeeStatus.going: (
         'Going',
         const Color(0xFFEAF3DE),
